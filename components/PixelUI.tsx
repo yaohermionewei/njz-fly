@@ -317,9 +317,10 @@ export const TouchControlButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonE
     <KeycapButton
       {...props}
       variant={attack ? 'gold' : 'secondary'}
+      depth="soft"
       snow={false}
       width={attack ? 72 : 60}
-      height={attack ? 68 : 48}
+      height={attack ? 68 : 60}
       data-held={held}
       className={`touch-pad ${attack ? 'touch-pad-attack' : 'touch-pad-move'} ${className}`}
       onPointerDown={(event) => {
@@ -405,8 +406,9 @@ export type KeycapVariant = keyof typeof KEYCAP_FACES | 'outline';
  * `primary` is blue with white text; `secondary` is light periwinkle with
  * navy text; `outline` has a transparent face. Snow is optional, for home.
  */
-export const KeycapButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: KeycapVariant; snow?: boolean; width: number; height: number; cell?: number }> = ({ variant = 'primary', snow = variant === 'primary', width, height, cell = 2, className = '', style, children, ...props }) => {
+export const KeycapButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: KeycapVariant; depth?: 'regular' | 'soft'; snow?: boolean; width: number; height: number; cell?: number }> = ({ variant = 'primary', depth = 'regular', snow = variant === 'primary', width, height, cell = 2, className = '', style, children, ...props }) => {
   const outlined = variant === 'outline';
+  const soft = depth === 'soft';
   const face = KEYCAP_FACES[outlined ? 'secondary' : variant];
   const snowy = snow && !outlined;
   const w = Math.round(width / cell);
@@ -423,7 +425,8 @@ export const KeycapButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement
     const inset = insetAt(row);
     const faceInset = Math.max(inset + 1, insetAt(row - 1), insetAt(row + 1));
     const y = top + row;
-    const color = row === h - 2 ? face.lip : y >= dark ? face.dark : y < light ? face.light : face.mid;
+    // Touch controls keep a light lower face instead of a heavy dark base.
+    const color = soft ? (y < light ? face.light : face.mid) : row === h - 2 ? face.lip : y >= dark ? face.dark : y < light ? face.light : face.mid;
     return { row, y, inset, faceInset, color };
   });
   // Bare buttons centre content inside their frame, excluding the shadow.
@@ -433,8 +436,8 @@ export const KeycapButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement
   return (
     <button type="button" {...props} className={`pixel-control keycap keycap-${variant} relative shrink-0 ${className}`} style={{ ...style, width: w * cell, height: (h + top + 2) * cell }}>
       <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${w} ${h + top + 2}`} shapeRendering="crispEdges">
-        {!outlined && <g fill="#0b1034" opacity="0.75">
-          {rows.map(({ row, y, inset }) => <rect key={row} x={inset} y={y + 2} width={w - inset * 2} height={1} />)}
+        {!outlined && <g fill="#0b1034" opacity={soft ? 0.25 : 0.75}>
+          {rows.map(({ row, y, inset }) => <rect key={row} x={inset} y={y + (soft ? 1 : 2)} width={w - inset * 2} height={1} />)}
         </g>}
         {rows.map(({ row, y, inset, faceInset, color }) => (
           <g key={row}>

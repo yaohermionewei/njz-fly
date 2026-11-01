@@ -1201,7 +1201,7 @@ const FlightGame: React.FC = () => {
     }
   }, []);
 
-  /** Short chiptune arpeggio used by the sunflower pickup and its fade-out. */
+  /** Short chiptune arpeggio shared by game effects and menu feedback. */
   const playArpeggio = useCallback((notes: number[], step: number, type: OscillatorType, volume: number) => {
     if (effectsMutedRef.current) return;
     try {
@@ -1222,6 +1222,7 @@ const FlightGame: React.FC = () => {
         gain.gain.exponentialRampToValueAtTime(0.0001, noteAt + step * 1.8);
         oscillator.connect(gain);
         gain.connect(audioContext.destination);
+        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
         oscillator.start(noteAt);
         oscillator.stop(noteAt + step * 2);
       });
@@ -1229,6 +1230,37 @@ const FlightGame: React.FC = () => {
       // Audio effects are optional; a blocked audio context must not stop play.
     }
   }, []);
+
+  // Play from the user action, so the first home-page tap also unlocks audio
+  // on Safari. Automatic pauses (e.g. leaving the app) stay silent.
+  const pickHomeMember = useCallback((member: number) => {
+    if (member === homeMemberRef.current) return;
+    homeMemberRef.current = member;
+    playArpeggio([659.25, 880], 0.035, 'triangle', 0.075);
+    setHomeMember(member);
+  }, [playArpeggio]);
+
+  const startFromMenu = useCallback(() => {
+    playArpeggio(phaseRef.current === 'paused' ? [523.25, 659.25, 1046.5] : [659.25, 880, 1318.5], 0.055, 'square', 0.045);
+    startGame();
+  }, [playArpeggio, startGame]);
+
+  const pauseFromControl = useCallback(() => {
+    if (phaseRef.current !== 'playing' || gameRef.current.deadAt) return;
+    playArpeggio([880, 659.25], 0.045, 'triangle', 0.075);
+    pauseGame();
+  }, [playArpeggio, pauseGame]);
+
+  const resumeFromControl = useCallback(() => {
+    if (phaseRef.current !== 'paused') return;
+    playArpeggio([659.25, 880], 0.045, 'triangle', 0.075);
+    resumeGame();
+  }, [playArpeggio, resumeGame]);
+
+  const homeFromPause = useCallback(() => {
+    playArpeggio([659.25, 523.25], 0.05, 'triangle', 0.075);
+    goHome();
+  }, [playArpeggio, goHome]);
 
   const playHealSound = useCallback(() => {
     if (effectsMutedRef.current) return;
@@ -1387,10 +1419,10 @@ const FlightGame: React.FC = () => {
         if (!event.repeat) shoot();
         event.preventDefault();
       } else if ((key === 'p' || key === 'escape') && phaseRef.current === 'playing') {
-        pauseGame();
+        if (!event.repeat) pauseFromControl();
         event.preventDefault();
       } else if ((key === 'p' || key === 'escape') && phaseRef.current === 'paused') {
-        resumeGame();
+        if (!event.repeat) resumeFromControl();
         event.preventDefault();
       }
     };
@@ -1406,7 +1438,7 @@ const FlightGame: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [pauseGame, resumeGame, shoot]);
+  }, [pauseFromControl, resumeFromControl, shoot]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2260,7 +2292,7 @@ const FlightGame: React.FC = () => {
           )}
           {(phase === 'playing' || phase === 'paused') && (
             <PixelButton
-              onClick={phase === 'paused' ? resumeGame : pauseGame}
+              onClick={phase === 'paused' ? resumeFromControl : pauseFromControl}
               className="h-11 w-11 text-[#e8efff]"
               aria-label={phase === 'paused' ? '继续游戏' : '暂停游戏'}
               title={phase === 'paused' ? '继续游戏' : '暂停游戏'}
@@ -2290,7 +2322,7 @@ const FlightGame: React.FC = () => {
         </div>
       </div>
 
-      {phase === 'ready' && <HomeScreen member={homeMember} keysEnabled={!helpOpen} onPick={setHomeMember} onStart={startGame} />}
+      {phase === 'ready' && <HomeScreen member={homeMember} keysEnabled={!helpOpen} onPick={pickHomeMember} onStart={startFromMenu} />}
       {phase === 'ready' && helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
 
       {/* Pause: a dim veil over the frozen stage and three big square buttons. */}
@@ -2298,13 +2330,13 @@ const FlightGame: React.FC = () => {
         <div className="result-backdrop absolute inset-0 z-40 flex items-center justify-center bg-[#060a22]/65 px-6" role="dialog" aria-modal="true" aria-label="游戏已暂停">
           {/* All three actions share the same face, outline and dimensions. */}
           <div className="pause-actions flex items-end gap-6">
-          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={goHome} aria-label="回到首页" title="回到首页">
+          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={homeFromPause} aria-label="回到首页" title="回到首页">
             <PixelIcon name="homeSolid" size={isPhone ? 26 : 39} />
           </KeycapButton>
-          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={startGame} aria-label="重新开始" title="重新开始">
+          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={startFromMenu} aria-label="重新开始" title="重新开始">
             <PixelIcon name="restartSolid" size={isPhone ? 26 : 39} />
           </KeycapButton>
-          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={resumeGame} aria-label="继续游戏" title="继续游戏">
+          <KeycapButton variant="secondary" width={isPhone ? 53 : 76} height={isPhone ? 53 : 76} cell={isPhone ? 1 : 2} onClick={resumeFromControl} aria-label="继续游戏" title="继续游戏">
             <PixelIcon name="playSolid" size={isPhone ? 26 : 39} />
           </KeycapButton>
           </div>

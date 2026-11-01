@@ -147,9 +147,9 @@ function pattern(rows: string[], centerX: number, top: number, id: string, gridX
   return rows.flatMap((line, row) => [...line].flatMap((cell, col) => cell === '#'
     ? [{ x: left + col * stepX, y: top + row * gridY, role: 'bonus' as const, patternId: id }] : []));
 }
-// The face is wider than a single grid cell: both isolated eye points fit
-// between the cheeks without deleting detail or tightening the 84/104 grid.
-const RABBIT = ['.###...###.', '#...#.#...#', '#....#....#', '#..#...#..#', '.#.......#.', '..#######..'];
+// Tall separated ears, a central V and straight cheek sides follow the pickup
+// head. Seven columns keep the face nearly square, with two isolated eyes.
+const RABBIT = ['.#...#.', '#.#.#.#', '#..#..#', '#.#.#.#', '#.....#', '.#####.'];
 const HEART = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
 const BELL = ['...#...', '..#.#..', '..#.#..', '.#...#.', '#######', '...#...'];
 const LETTERS = [['#..#', '##.#', '#.##', '#..#', '#..#'], ['.###', '...#', '...#', '#..#', '.##.'], ['####', '...#', '..#.', '.#..', '####']];
@@ -275,26 +275,30 @@ export function buildOriginalPhoneLayout(segment: SegmentDef, random: () => numb
     case 'pig-sky-row':
       setRoute(0, [[120, 470], [450, 500], [750, 650], [1050, 650], [1350, 530], [1760, 470]]); break;
     case 'blocks-steps':
-      pipes.forEach(p => { p.y += 110; }); shiftRoute(0, -60); break;
+      // Keep the three 100-unit steps in the playable middle. The mirrored
+      // version used to sit at 90/190/290, almost against the top edge.
+      pipes.forEach(p => { p.y += 10; });
+      setRoute(0, [[100, 290], [650, 85], [860, 85]]); routes[0].clearance = 136;
+      break;
     case 'blocks-hook':
       cap(0, 160); pipes[1].y = 245; pipes[1].x += 5 * X; cap(2, 610);
       setRoute(0, [[100, 380], [330, 450], [820, 450]]); break;
     case 'blocks-scatter':
       pipes[0].y = 130; pipes[1].y = 580; pipes[2].y = 300; pipes[3].y = 100; pipes[4].y = 620; pipes[5].y = 390;
       setRoute(0, [[160, 400], [420, 430]]);
-      setRoute(1, [[640, 80], [700, 80]]);
-      setRoute(2, [[900, 530], [980, 530]]);
-      setRoute(3, [[1150, 350], [1210, 350]]);
-      setRoute(4, [[1380, 100], [1440, 100]]);
-      setRoute(5, [[1620, 640], [1700, 640]]);
+      setRoute(1, [[590, 80], [760, 80]]);
+      setRoute(2, [[840, 530], [1040, 530]]);
+      setRoute(3, [[1090, 350], [1270, 350]]);
+      setRoute(4, [[1320, 100], [1500, 100]]);
+      setRoute(5, [[1500, 640], [1700, 640]]);
       break;
     case 'blocks-debris':
       pipes[0].y = 100; pipes[1].y = 620; pipes[2].y = 350; pipes[3].y = 100; pipes[4].y = 620; pipes[5].y = 390;
       setRoute(0, [[150, 400], [400, 410]]);
-      setRoute(1, [[680, 85], [740, 85]]);
-      setRoute(2, [[980, 550], [1040, 550]]);
-      setRoute(3, [[1220, 340], [1260, 340]]);
-      setRoute(4, [[1460, 85], [1500, 85]]);
+      setRoute(1, [[620, 85], [800, 85]]);
+      setRoute(2, [[920, 550], [1100, 550]]);
+      setRoute(3, [[1160, 340], [1320, 340]]);
+      setRoute(4, [[1400, 85], [1560, 85]]);
       break;
     case 'blocks-weave':
       pipes.forEach((p, i) => { p.y = i % 2 ? 550 : 170; p.length = 320; });

@@ -130,7 +130,7 @@ test('phone layouts preserve stairs, waves, tilted-pipe proportions and both bun
     }
   }
   const center = BAR * 1.5 * 1.3;
-  const eyes = phone('bonus-bunny').coins.filter(c => c.y === 412 && Math.abs(c.x - center) < 300);
+  const eyes = phone('bonus-bunny').coins.filter(c => c.y === 412 && Math.abs(c.x - center) < 200);
   assert.equal(eyes.length, 2, 'both isolated eyes remain inside the outline');
   assert.ok(eyes[0].x < center && eyes[1].x > center, 'one eye on each side');
   assert.ok(Math.abs(eyes[0].x + eyes[1].x - center * 2) < 0.001, 'eyes remain symmetric');
@@ -152,6 +152,30 @@ test('phone passages retain pressure and no pipe collapses into a tiny sliver', 
   const funnel = buildSegment(level.SEGMENTS_BY_ID.get('wall-funnel'), false, createRandom(1), 1.5);
   const gaps = [0, 2, 4].map(i => funnel.pipes[i + 1].y - funnel.pipes[i + 1].length / 2 - funnel.pipes[i].y - funnel.pipes[i].length / 2);
   assert.deepEqual(gaps, [400, 290, 220], 'the funnel visibly closes down to a deliberate neck');
+});
+
+test('phone bunny proportions, central stair obstacles and scatter rewards match the refined motifs', () => {
+  const phone = (id, mirrored = false) => buildSegment(level.SEGMENTS_BY_ID.get(id), mirrored, createRandom(1), 1.5);
+  const head = phone('bonus-bunny').coins.filter(c => c.patternId === 'bunny');
+  const xs = head.map(c => c.x), ys = head.map(c => c.y);
+  const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
+  assert.ok(width / height >= 0.9 && width / height <= 1.05, 'head follows the nearly square pickup silhouette, not a wide face');
+  const center = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const tips = head.filter(c => c.y === Math.min(...ys));
+  assert.equal(tips.length, 2, 'two distinct rounded ear tips');
+  assert.ok(tips[0].x < center && tips[1].x > center);
+  assert.equal(head.filter(c => c.y === 308 && Math.abs(c.x - center) < 1).length, 1, 'ear gap closes in a central V');
+  assert.deepEqual(phone('blocks-steps', true).pipes.map(p => p.y), [190, 290, 390], 'mirrored stairs move down together by 100');
+  for (const mirror of [false, true]) {
+    for (const [id, minimum] of [['blocks-scatter', 19], ['blocks-debris', 16]]) {
+      const c = phone(id, mirror);
+      assert.ok(c.coins.length >= minimum, `${id}: enough feedback for a harder obstacle field`);
+      for (const r of c.routes.filter(r => r.role === 'reward')) {
+        assert.ok(c.coins.filter(c => c.routeId === r.id).length >= 3, `${id}: optional reward is a small collectible chain, not a single lonely stick`);
+      }
+      assert.deepEqual(level.validatePhoneLayout(c, segmentWidth(level.SEGMENTS_BY_ID.get(id), 1.5)), []);
+    }
+  }
 });
 
 test('phone corridor stem grows down into a solid junction while retaining the upper route', () => {
