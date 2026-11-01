@@ -197,7 +197,7 @@
 
 @font-face {
   font-family: 'NJZPixelZh';
-  src: url('/fonts/Cubic_11.ttf') format('truetype');
+  src: url('/fonts/Cubic_11.woff2') format('woff2');
   font-display: swap;
   font-weight: 400;
 }
@@ -212,124 +212,6 @@
 .font-pixel-en {
   font-family: 'NJZPixelEn', monospace;
   font-synthesis: none;
-}
-
-@keyframes song-title-marquee-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.song-title-marquee {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.song-title-marquee-track {
-  display: inline-flex;
-  min-width: max-content;
-  will-change: transform;
-  animation: song-title-marquee-scroll 10s linear infinite;
-}
-
-.song-title-marquee-segment {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.song-title-marquee-gap {
-  width: 2rem;
-  flex-shrink: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .song-title-marquee-track {
-    animation: none;
-  }
-}
-
-@keyframes loading-bars-pulse-a {
-  0%, 100% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scaleY(0.53);
-    opacity: 0.72;
-  }
-}
-
-@keyframes loading-bars-pulse-b {
-  0%, 100% {
-    transform: scaleY(0.53);
-    opacity: 0.72;
-  }
-  50% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
-@keyframes loading-bars-pulse-c {
-  0%, 100% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scaleY(0.42);
-    opacity: 0.68;
-  }
-}
-
-@keyframes loading-bars-pulse-d {
-  0%, 100% {
-    transform: scaleY(0.42);
-    opacity: 0.68;
-  }
-  50% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
-.loading-bars-svg {
-  display: block;
-}
-
-.loading-bars-svg__bar {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  will-change: transform, opacity;
-}
-
-.loading-bars-svg__bar--1 {
-  animation: loading-bars-pulse-a 0.9s ease-in-out infinite;
-}
-
-.loading-bars-svg__bar--2 {
-  animation: loading-bars-pulse-b 0.9s ease-in-out infinite;
-  animation-delay: 0.1s;
-}
-
-.loading-bars-svg__bar--3 {
-  animation: loading-bars-pulse-c 0.9s ease-in-out infinite;
-  animation-delay: 0.2s;
-}
-
-.loading-bars-svg__bar--4 {
-  animation: loading-bars-pulse-d 0.9s ease-in-out infinite;
-  animation-delay: 0.3s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loading-bars-svg__bar {
-    animation-duration: 1.8s;
-    animation-timing-function: ease-out;
-  }
 }
 
 /*
