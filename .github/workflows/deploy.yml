@@ -1,0 +1,44 @@
+name: Deploy to Tencent Cloud
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Deploy dist via rsync
+        run: |
+          rsync -az --no-times --omit-dir-times --no-perms --no-owner --no-group \
+            --exclude '.well-known/' --exclude '.user.ini' --exclude '.htaccess' \
+            -e "ssh -p ${{ secrets.SERVER_PORT }} -o StrictHostKeyChecking=no" \
+            dist/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/
+
+      - name: Warm up cache
+        run: |
+          echo "Waiting for files to settle..."
+          sleep 5
+          echo "Warming up cache..."
+          curl -s -o /dev/null -w "Homepage: %{http_code} (%{time_total}s)\n" https://njzfly.wystudio.zone/
+          echo "Cache warmed up!"

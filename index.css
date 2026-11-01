@@ -1,0 +1,646 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pixel-control {
+  image-rendering: pixelated;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.pixel-control:active {
+  filter: brightness(1.18);
+  transform: translateY(2px);
+}
+
+/* Red screen edges when the player is hit, fading out in pixel-like steps. */
+@keyframes damage-vignette {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.damage-vignette {
+  box-shadow:
+    inset 0 0 0 6px rgba(255, 52, 86, 0.75),
+    inset 0 0 0 12px rgba(255, 52, 86, 0.32),
+    inset 0 0 120px 36px rgba(255, 36, 72, 0.5);
+  animation: damage-vignette 700ms steps(7, end) forwards;
+}
+
+/* Invincible mode: a soft rainbow glow around the screen, flickering in its
+   last two seconds, plus the HUD countdown bar. */
+@keyframes power-glow-hue {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+
+@keyframes power-warn {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+
+.power-glow {
+  box-shadow:
+    inset 0 0 0 4px rgba(255, 120, 200, 0.45),
+    inset 0 0 0 9px rgba(255, 216, 74, 0.22),
+    inset 0 0 90px 24px rgba(123, 224, 143, 0.28);
+  animation:
+    power-glow-hue 1.6s linear infinite,
+    power-warn 0.24s steps(1, end) var(--warn-delay, 8000ms) infinite;
+}
+
+/* Last two seconds of invincibility: the centre countdown blinks. */
+.power-warn-blink {
+  animation: power-warn 0.24s steps(1, end) infinite;
+}
+
+/* Centre counters: an elastic pop on every gain, a rising "+2" while
+   invincible, and a pulsing rainbow "×2" badge. */
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.18); }
+  65% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.count-pop {
+  animation: count-pop 320ms ease-out;
+  transform-origin: center;
+}
+
+@keyframes count-float {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); }
+  20% { opacity: 1; transform: translate(-50%, -6px) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -26px) scale(1); }
+}
+
+.count-float {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  color: #ffd84a;
+  pointer-events: none;
+  animation: count-float 700ms ease-out forwards;
+}
+
+@keyframes double-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.double-badge {
+  color: #ff9fd0;
+  animation:
+    power-glow-hue 1.2s linear infinite,
+    double-pulse 0.55s ease-in-out infinite;
+}
+
+@keyframes power-banner {
+  0% { opacity: 0; transform: scale(0.5); }
+  12% { opacity: 1; transform: scale(1.2); }
+  22% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Result card: the stage dims, then the card pops up in pixel steps. */
+@keyframes result-backdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.result-backdrop {
+  animation: result-backdrop 400ms ease-out both;
+}
+
+@keyframes result-card {
+  0% { opacity: 0; transform: translateY(18px) scale(0.86); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.result-card {
+  animation: result-card 420ms steps(6, end) 150ms both;
+}
+
+/* The live result uses the landscape stage; 3:4 is reserved for sharing. */
+.landscape-result-backdrop {
+  display: grid;
+  place-items: center;
+  background: rgba(6, 10, 34, .68);
+  font-family: NJZPixelZh, monospace;
+  padding: max(14px, var(--game-safe-top)) max(24px, var(--game-safe-right))
+    max(14px, var(--game-safe-bottom)) max(24px, var(--game-safe-left));
+  animation: result-backdrop 220ms ease-out both;
+}
+.landscape-result-frame { position: relative; flex-shrink: 0; }
+.landscape-result-fit { position: absolute; top: 0; left: 0; width: 760px; height: 360px; transform-origin: 0 0; }
+.landscape-result-card { position: relative; width: 100%; height: 100%; filter: drop-shadow(0 5px 0 #091638) drop-shadow(0 14px 26px #030b2c60); }
+.landscape-result-card canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+@keyframes result-landscape-enter {
+  0% { opacity: 0; transform: translateY(12px) scale(.94); }
+  70% { opacity: 1; transform: translateY(-2px) scale(1.012); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.result-landscape-enter { animation: result-landscape-enter 340ms steps(8, end) both; }
+.result-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #dce9fb; font-size: 14px; }
+.landscape-result-actions { position: absolute; left: 338px; display: flex; align-items: flex-end; gap: 14px; }
+.landscape-result-backdrop:focus, .landscape-result-actions .keycap:focus { outline: none; }
+.landscape-result-actions .keycap:focus-visible { filter: brightness(1.2); }
+.landscape-result-home { position: absolute; height: 30px; padding: 0; color: #d5e5ff; }
+.landscape-result-home .result-home-art { display: block; overflow: visible; }
+.landscape-result-home::after { content: ''; position: absolute; inset: -5px -8px; }
+.landscape-result-home:hover { color: white; }
+.landscape-result-replay { position: absolute; left: 36px; top: 286px; display: flex; align-items: center; gap: 6px; padding: 5px 8px; min-height: 30px; font-size: 12px; color: #e9dda6; }
+.landscape-result-note { position: absolute; top: 318px; left: 44px; font-size: 12px; color: #dcefff; white-space: nowrap; }
+
+.result-preview-root { overflow: hidden; background: #092b7b; color: #e7f1ff; font-family: NJZPixelZh, monospace; touch-action: none; user-select: none; }
+.result-preview-scene { position: absolute; inset: 0; overflow: hidden; }
+.result-preview-scene img { position: absolute; bottom: 0; left: 50%; max-width: none; width: auto; transform: translateX(-50%); image-rendering: pixelated; }
+.result-preview-scene .preview-far { height: 100%; }
+.result-preview-scene .preview-middle { height: 60%; }
+.result-preview-scene .preview-front { height: 30%; }
+.result-preview-toolbar { position: absolute; top: max(12px, var(--game-safe-top)); left: max(20px, var(--game-safe-left)); right: max(20px, var(--game-safe-right)); z-index: 50; display: flex; align-items: center; justify-content: space-between; pointer-events: none; font-size: 12px; color: #c3d4f1; }
+.result-preview-toolbar button { pointer-events: auto; display: grid; place-items: center; width: 36px; height: 36px; }
+.result-preview-start { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: #060a22a8; gap: 24px; }
+.result-preview-start h1 { font-size: 28px; }
+.result-preview-start p { font-size: 14px; color: #bfd5f1; }
+@media (prefers-reduced-motion: reduce) { .result-landscape-enter { animation-duration: 1ms; } }
+
+/* Rainbow-cycling words inside the banner. */
+.double-badge-text {
+  color: #ff9fd0;
+  display: inline-block;
+  animation: power-glow-hue 1.2s linear infinite;
+}
+
+.power-banner {
+  opacity: 0;
+  animation: power-banner 1.8s ease-out forwards;
+}
+
+/* HUD counter pop when a pig is defeated. */
+@keyframes hud-bump {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.45) translateY(-2px); }
+  100% { transform: scale(1); }
+}
+
+.hud-bump {
+  animation: hud-bump 320ms steps(5, end);
+  transform-origin: 30% 50%;
+}
+
+@font-face {
+  font-family: 'NJZPixelZh';
+  src: url('/fonts/Cubic_11.ttf') format('truetype');
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'NJZPixelEn';
+  src: url('/fonts/bunnies-pixel-en.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 700;
+}
+
+.font-pixel-en {
+  font-family: 'NJZPixelEn', monospace;
+  font-synthesis: none;
+}
+
+@keyframes song-title-marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.song-title-marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.song-title-marquee-track {
+  display: inline-flex;
+  min-width: max-content;
+  will-change: transform;
+  animation: song-title-marquee-scroll 10s linear infinite;
+}
+
+.song-title-marquee-segment {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.song-title-marquee-gap {
+  width: 2rem;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .song-title-marquee-track {
+    animation: none;
+  }
+}
+
+@keyframes loading-bars-pulse-a {
+  0%, 100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.53);
+    opacity: 0.72;
+  }
+}
+
+@keyframes loading-bars-pulse-b {
+  0%, 100% {
+    transform: scaleY(0.53);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes loading-bars-pulse-c {
+  0%, 100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.42);
+    opacity: 0.68;
+  }
+}
+
+@keyframes loading-bars-pulse-d {
+  0%, 100% {
+    transform: scaleY(0.42);
+    opacity: 0.68;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.loading-bars-svg {
+  display: block;
+}
+
+.loading-bars-svg__bar {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.loading-bars-svg__bar--1 {
+  animation: loading-bars-pulse-a 0.9s ease-in-out infinite;
+}
+
+.loading-bars-svg__bar--2 {
+  animation: loading-bars-pulse-b 0.9s ease-in-out infinite;
+  animation-delay: 0.1s;
+}
+
+.loading-bars-svg__bar--3 {
+  animation: loading-bars-pulse-c 0.9s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+.loading-bars-svg__bar--4 {
+  animation: loading-bars-pulse-d 0.9s ease-in-out infinite;
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bars-svg__bar {
+    animation-duration: 1.8s;
+    animation-timing-function: ease-out;
+  }
+}
+
+/*
+ * The game is landscape-only. iPhone Safari cannot lock orientation, so a
+ * phone held upright rotates the whole game with CSS; once the player turns
+ * the phone sideways (or the browser itself switches to landscape) it reads
+ * normally. Layout sizes stay landscape, which the canvas resize relies on.
+ */
+.game-root {
+  --game-safe-top: env(safe-area-inset-top, 0px);
+  --game-safe-left: env(safe-area-inset-left, 0px);
+  --game-safe-right: env(safe-area-inset-right, 0px);
+  --game-safe-bottom: env(safe-area-inset-bottom, 0px);
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+}
+
+.touch-only {
+  display: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-only {
+    display: flex !important;
+  }
+}
+
+/* phone-device already checks coarse input and excludes tablets/desktops. */
+@media (orientation: portrait) {
+  .game-root.phone-device:not(.allow-portrait) {
+    --game-safe-top: env(safe-area-inset-right, 0px);
+    --game-safe-left: env(safe-area-inset-top, 0px);
+    --game-safe-right: env(safe-area-inset-bottom, 0px);
+    --game-safe-bottom: env(safe-area-inset-left, 0px);
+    inset: auto;
+    top: 0;
+    left: 100vw;
+    width: 100dvh;
+    height: 100vw;
+    transform-origin: 0 0;
+    transform: rotate(90deg);
+  }
+
+}
+
+/* Development-only device preview; production cannot add this class via a URL. */
+.phone-preview .touch-only { display: flex !important; }
+.phone-preview .mouse-only { display: none !important; }
+
+/* Fit the rotated game container, never the unrotated viewport height.
+   Only the body scrolls, so the close button stays within reach. */
+.help-backdrop {
+  padding: max(12px, var(--game-safe-top)) max(16px, var(--game-safe-right))
+    max(12px, var(--game-safe-bottom)) max(16px, var(--game-safe-left));
+}
+
+.help-card {
+  container-type: inline-size;
+  animation: help-card-enter 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes help-card-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-card { animation: none; }
+}
+
+.help-scroll {
+  overscroll-behavior: contain;
+  touch-action: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* CSS rotation changes the layout width without changing viewport breakpoints. */
+@container (min-width: 480px) {
+  .help-pickups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.phone-device .pause-actions {
+  gap: 16px;
+}
+
+/* Extra forgiving tap area around the phone's smaller pause buttons. */
+.phone-device .pause-actions .keycap::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.touch-controls {
+  padding-left: max(24px, calc(var(--game-safe-left) + 16px));
+  padding-right: max(24px, calc(var(--game-safe-right) + 16px));
+  padding-bottom: max(28px, calc(var(--game-safe-bottom) + 20px));
+}
+
+.touch-pad {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  color: #263669;
+}
+
+.touch-pad-attack { color: #694317; }
+
+.touch-pad-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  filter: drop-shadow(0 1px 0 #dbe5ff);
+}
+
+.touch-pad-attack .touch-pad-content { filter: drop-shadow(0 1px 0 #fff0ac); }
+
+.touch-pad-label {
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 2px;
+  padding-left: 2px;
+}
+
+.touch-pad[data-held='true'] {
+  transform: translateY(2px);
+  filter: brightness(1.1);
+}
+
+.touch-pad:focus-visible { outline: 2px solid #e8efff; outline-offset: 4px; }
+
+/* Home page: an edgeless shade down the middle column and along the top and
+   bottom edges so the title, members and button read over the city. */
+.home-screen {
+  background:
+    radial-gradient(ellipse 46% 80% at 50% 50%, rgba(6, 10, 34, 0.5) 0%, rgba(6, 10, 34, 0.25) 60%, rgba(6, 10, 34, 0) 100%),
+    linear-gradient(180deg, rgba(6, 10, 34, 0.45) 0%, rgba(6, 10, 34, 0) 28%, rgba(6, 10, 34, 0) 72%, rgba(6, 10, 34, 0.5) 100%);
+}
+
+/* Big pixel title: icy two-band fill, a blue pixel outline and a hard
+   stepped shadow (drop-shadows chain so the outline gets its corners). */
+.home-screen .home-title {
+  /* Cubic 11 has a 1/6em ink gap; adding 1/12em makes that gap 1.5×. */
+  letter-spacing: calc(1em / 12);
+  margin-inline-end: calc(-1em / 12);
+}
+
+.home-title {
+  background: linear-gradient(180deg, #ffffff 0 52%, #dce7ff 52% 76%, #b6c9ff 76% 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 -2px 0 #5d78d6) drop-shadow(2px 0 0 #5d78d6) drop-shadow(-2px 0 0 #5d78d6) drop-shadow(0 2px 0 #5d78d6)
+    drop-shadow(3px 4px 0 #151c4a);
+}
+
+/* Pixel cross sparkles around the title. */
+@keyframes home-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  40%, 60% { opacity: 1; transform: scale(1); }
+}
+.home-twinkle {
+  --spark: #fff;
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--spark);
+  box-shadow: 0 -3px var(--spark), 0 3px var(--spark), -3px 0 var(--spark), 3px 0 var(--spark), 0 -6px rgba(255, 255, 255, 0.5), 0 6px rgba(255, 255, 255, 0.5), -6px 0 rgba(255, 255, 255, 0.5), 6px 0 rgba(255, 255, 255, 0.5);
+  animation: home-twinkle 2.2s steps(4) infinite;
+}
+.home-twinkle-small {
+  box-shadow: 0 -3px var(--spark), 0 3px var(--spark), -3px 0 var(--spark), 3px 0 var(--spark);
+}
+
+/* A soft glow in the member's colour behind the pick. */
+.home-glow {
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(var(--member), 0.26) 0%, rgba(var(--member), 0.12) 45%, rgba(var(--member), 0.04) 75%, transparent 100%);
+}
+
+/* The turntable's RAF owns transforms; generic button transitions must not
+   interpolate the invisible jump between the two ends of the member arc. */
+.home-member {
+  image-rendering: pixelated;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform, opacity;
+}
+
+/* Trail hearts drifting back along the ribbon, as in the game. */
+@keyframes home-trail-heart {
+  0% { opacity: 0; transform: translate(0, -60%); }
+  15% { opacity: 1; }
+  50% { transform: translate(calc(var(--travel) * 0.5), -20%); }
+  85% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(var(--travel), -70%); }
+}
+.home-trail-heart {
+  display: block;
+  animation: home-trail-heart 1.8s linear infinite;
+}
+
+/* The name swaps in with the member. */
+@keyframes home-name {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-name {
+  animation: home-name 260ms ease-out both;
+}
+
+/* Columns rise in once when the page opens. */
+@keyframes home-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-enter {
+  animation: home-enter 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-enter-late {
+  animation-delay: 140ms;
+}
+
+/* The play arrow nudges forward in two pixel steps. */
+@keyframes home-start-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+.home-start-arrow {
+  animation: home-start-arrow 1s steps(1) infinite;
+}
+
+/* Keycap buttons: white labels with a navy pixel shadow on the blue primary,
+   plain navy labels on the light secondary. */
+.keycap-primary {
+  color: #fff;
+}
+.keycap-primary > span {
+  filter: drop-shadow(0 2px 0 #1b2363);
+}
+.keycap-secondary {
+  color: #1b2363;
+}
+.keycap-outline {
+  color: #d6dfff;
+}
+.keycap:hover {
+  filter: brightness(1.08);
+}
+
+/* Keycaps for the desktop controls hint. */
+.home-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid rgba(226, 234, 255, 0.45);
+  background: rgba(6, 10, 34, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.mouse-only {
+  display: none !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mouse-only {
+    display: flex !important;
+  }
+}
+/* Any touch screen (phones, tablets) never shows keyboard hints. */
+@media (any-pointer: coarse) {
+  .mouse-only {
+    display: none !important;
+  }
+}
+
+/* Members bob gently out of step (result card, home page). */
+@keyframes member-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.member-bob {
+  display: block;
+  animation: member-bob 1.4s ease-in-out infinite;
+}
+
+/* The member just picked on the home page springs up. */
+@keyframes member-picked {
+  0% { transform: scale(0.7); }
+  55% { transform: scale(1.15); }
+  80% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.member-picked {
+  display: block;
+  animation: member-picked 360ms ease-out both;
+}
+
+.help-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 224, 255, 0.4) transparent;
+}
