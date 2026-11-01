@@ -8,7 +8,7 @@ npm run build
 release="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
 staging=$(ssh -o BatchMode=yes ubuntu-gj-sh 'mktemp -d /tmp/njzfly.XXXXXXXX')
 [[ "$staging" == /tmp/njzfly.* ]] || exit 1
-rsync -rz --chmod=D755,F644 --exclude='._*' --exclude='.DS_Store' \
+rsync -rz --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r --exclude='._*' --exclude='.DS_Store' \
   dist/ "ubuntu-gj-sh:$staging/"
 
 ssh -o BatchMode=yes ubuntu-gj-sh bash -s -- "$staging" "$release" <<'REMOTE'
