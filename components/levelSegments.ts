@@ -1,4 +1,5 @@
-import { buildOriginalPhoneLayout, placePhoneItems, phoneRestAfter, validatePhoneLayout, validatePhoneJoin, type PickupRoute } from './phoneLayouts';
+import { buildPhoneLayout, validatePhoneLayout, type PickupRoute } from './phoneLayouts';
+import { pigScaleFor } from './displayProfile';
 
 /**
  * Hand-authored level segments, a reachability solver and a song-aware
@@ -85,6 +86,8 @@ export interface SegmentContent {
   coins: CoinSpec[];
   entityScale?: number;
   routes?: PickupRoute[];
+  /** Phone only: vertical spacing relative to desktop (entities are 1.5×). */
+  layoutScale?: number;
   /** The director skips geometry that cannot fit enlarged objects safely. */
   layoutInvalid?: boolean;
 }
@@ -983,7 +986,7 @@ export const SEGMENTS: SegmentDef[] = [
   },
 ];
 
-for (const segment of SEGMENTS) Object.defineProperty(segment, 'buildPhone', { get: () => (random: () => number, mirrored: boolean) => buildOriginalPhoneLayout(segment, random, mirrored) });
+for (const segment of SEGMENTS) Object.defineProperty(segment, 'buildPhone', { get: () => (random: () => number, mirrored: boolean) => buildPhoneLayout(segment, random, mirrored) });
 
 export const SEGMENTS_BY_ID = new Map(SEGMENTS.map((segment) => [segment.id, segment]));
 
@@ -1053,7 +1056,8 @@ export function pipeTopY(pipe: PipeSpec): number {
 
 export function pigCenterY(pipe: PipeSpec): number {
   // Hooves stand on the snow that settles on top of the pipe.
-  return pipeTopY(pipe) - (PIG_HEIGHT / 2 + 6) * (pipe.scale ?? 1);
+  const scale = pipe.scale ?? 1;
+  return pipeTopY(pipe) - PIG_HEIGHT / 2 * pigScaleFor(scale) - 6 * scale;
 }
 
 /** Furthest a pig may walk from its pipe's center. */
@@ -1061,7 +1065,7 @@ export function pigPatrolHalfSpan(pipe: PipeSpec, pig: PigSpec): number {
   if (pig.patrol <= 0) return 0;
   const scale = pipe.scale ?? 1;
   const surface = pipe.facing === 'left' || pipe.facing === 'right' ? pipe.length : PIPE_THICKNESS * 1.08 * scale;
-  return Math.max(0, (surface / 2 - (PIG_WIDTH / 2 + 8) * scale) * pig.patrol);
+  return Math.max(0, (surface / 2 - PIG_WIDTH / 2 * pigScaleFor(scale) - 8 * scale) * pig.patrol);
 }
 
 export function rectPolygon(x: number, y: number, width: number, height: number): Point[] {
@@ -1156,8 +1160,8 @@ function blockedColumns(content: SegmentContent, width: number, includePigs: boo
     content.pigs.forEach((pig) => {
       const support = content.pipes[pig.pipe];
       const span = pigPatrolHalfSpan(support, pig);
-      const width = PIG_WIDTH * scale * PIG_HIT_SCALE;
-      const height = PIG_HEIGHT * scale * PIG_HIT_SCALE;
+      const width = PIG_WIDTH * pigScaleFor(scale) * PIG_HIT_SCALE;
+      const height = PIG_HEIGHT * pigScaleFor(scale) * PIG_HIT_SCALE;
       polygons.push(rectPolygon(support.x - span - width / 2, pigCenterY(support) - height / 2, span * 2 + width, height));
     });
   }
@@ -1351,8 +1355,6 @@ function tryPlace(state: DirectorState, segment: SegmentDef, section: string, mi
   for (const mirrored of options) {
     const content = buildSegment(segment, mirrored, state.random, state.entityScale, state.entry);
     if (state.entityScale > 1 && validatePhoneLayout(content, segmentWidth(segment, state.entityScale)).length) continue;
-    const previous = state.plan.at(-1);
-    if (state.entityScale > 1 && previous && validatePhoneJoin(previous, { segment, mirrored, startBar: state.bar, section, content }).length) continue;
     const result = solveSegment(content, segmentWidth(segment, state.entityScale), state.entry);
     if (!result.ok) continue;
     state.plan.push({ segment, mirrored, startBar: state.bar, section, content });
@@ -1420,7 +1422,7 @@ function fillSection(state: DirectorState, section: SongSection) {
     if (!placed) {
       // The breadcrumb trail is empty space: it always fits.
       const rest = SEGMENTS_BY_ID.get('rest-breadcrumbs')!;
-      const content = state.entityScale > 1 ? phoneRestAfter(state.plan.at(-1)) : buildSegment(rest, false, state.random, state.entityScale, state.entry);
+      const content = buildSegment(rest, false, state.random, state.entityScale, state.entry);
       state.plan.push({ segment: rest, mirrored: false, startBar: state.bar, section: section.name, content });
       state.bar += 1;
       state.entry = solveSegment(content, segmentWidth(rest, state.entityScale), state.entry).exit;
@@ -1432,12 +1434,9 @@ function fillSection(state: DirectorState, section: SongSection) {
 export function planSong(seed: number, entityScale = 1): PlannedSegment[] {
   const state: DirectorState = { random: createRandom(seed), plan: [], bar: 0, entry: fullEntry(), maxTier: new Map(), entityScale };
   SONG_SECTIONS.forEach((section) => fillSection(state, section));
-  if (entityScale > 1) placePhoneItems(state.plan, state.random);
-  else {
-    placeHearts(state.plan, state.random);
-    placeSunflowers(state.plan);
-    placeMorphs(state.plan);
-  }
+  placeHearts(state.plan, state.random);
+  placeSunflowers(state.plan);
+  placeMorphs(state.plan);
   return state.plan;
 }
 
@@ -1454,7 +1453,7 @@ function placeHearts(plan: PlannedSegment[], random: () => number) {
     let entry = fullEntry();
     for (const planned of plan) {
       entries.set(planned, entry);
-      entry = solveSegment(planned.content, segmentWidth(planned.segment), entry).exit;
+      entry = solveSegment(planned.content, segmentWidth(planned.segment, planned.content.entityScale), entry).exit;
     }
   }
   const sections = new Map<string, PlannedSegment[]>();
@@ -1466,7 +1465,7 @@ function placeHearts(plan: PlannedSegment[], random: () => number) {
       .filter(({ planned, pipe }) => {
         if (!planned.content.entityScale) return true;
         const heart: CoinSpec = { x: pipe.x, y: pigCenterY(pipe), role: 'riskHeal' };
-        return solveSegment({ ...planned.content, coins: [...planned.content.coins, heart] }, segmentWidth(planned.segment), entries.get(planned)).ok;
+        return solveSegment({ ...planned.content, coins: [...planned.content.coins, heart] }, segmentWidth(planned.segment, planned.content.entityScale), entries.get(planned)).ok;
       });
     let calm: PlannedSegment | undefined;
     let afterHard = false;
@@ -1528,7 +1527,7 @@ function placeMorphs(plan: PlannedSegment[]) {
     let best: { planned: PlannedSegment; coin: CoinSpec; cost: number } | undefined;
     plan.forEach((planned) => planned.content.coins.forEach((coin) => {
       if (!isPickup(coin)) return;
-      const cost = Math.abs(planned.startBar + coin.x / BAR - target) + (coin.role === 'guide' ? 0 : 0.5);
+      const cost = Math.abs(planned.startBar + coin.x / (BAR * (planned.content.entityScale ?? 1)) - target) + (coin.role === 'guide' ? 0 : 0.5);
       if (!best || cost < best.cost) best = { planned, coin, cost };
     }));
     if (!best) continue;
@@ -1553,8 +1552,7 @@ export function extendPlan(plan: PlannedSegment[], seed: number, bars = 24): Pla
   };
   fillSection(state, { name: '加时', bars, wave: [2, 3, 0, 2, 3, 3, 0] });
   const extension = state.plan.slice(plan.length);
-  if (state.entityScale > 1) placePhoneItems(extension, state.random, true);
-  else placeHearts(extension, state.random);
+  placeHearts(extension, state.random);
   return extension;
 }
 

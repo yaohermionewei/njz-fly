@@ -31,3 +31,7 @@ export function readPhoneDevice(): boolean {
 
 /** Enlarge gameplay objects only. Backgrounds and the fixed 720-unit view never zoom. */
 export const PHONE_ENTITY_SCALE = 1.5;
+/** Pigs grow less than the player: at 1.5 they outweighed her on a phone and
+ * crowded the 720-unit height above their platforms. */
+export const PHONE_PIG_SCALE = 1.25;
+export const pigScaleFor = (entityScale: number) => (entityScale > 1 ? PHONE_PIG_SCALE : 1);

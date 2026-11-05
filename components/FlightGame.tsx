@@ -31,12 +31,13 @@ import {
 } from './levelSegments';
 import { KeycapButton, PixelButton, PixelFrame, PixelIcon, PixelNumber, TouchControlButton } from './PixelUI';
 import { PICKUP_HEIGHT } from './gameMetrics';
-import { PHONE_ENTITY_SCALE, readPhoneDevice } from './displayProfile';
+import { PHONE_ENTITY_SCALE, pigScaleFor, readPhoneDevice } from './displayProfile';
 import { phoneFrameSteps } from './frameTiming';
 
 import supernaturalAudio from '../songs/Supernatural - 250 Remix.MP3';
 import { SQUAD, SQUAD_FRAME_COUNT } from './flightMembers';
 import ResultModal from './ResultModal';
+import SupportPanel from './SupportPanel';
 import { prepareResultCard } from './resultCardArt';
 import bottom1 from '../NJZPowerpuffGirls/bottom1.webp';
 import bottom2 from '../NJZPowerpuffGirls/bottom2.webp';
@@ -183,15 +184,26 @@ function popPose(since: number): { visibleOld: boolean; scale: number; flash: nu
 const MORPH_SQUEEZE_MS = 110;
 const MORPH_SETTLE_MS = 320;
 /**
- * Score = distance flown + light sticks + pigs, pigs weighted highest. Over a
- * full song that is roughly 700 from distance, ~2000 from sticks and ~1100
- * from pigs, so skill outweighs simply surviving.
+ * Score = distance flown + light sticks + pigs, pigs weighted highest: a pig
+ * is worth fifteen sticks, so leaving the guide line to shoot one pays off.
  */
 const DISTANCE_PER_POINT = 100;
 /** Song length from the level plan, until the audio reports its own (iOS loads it late). */
 const SONG_FALLBACK_SECONDS = barDistance(SONG_TOTAL_BARS) / CRUISE_SPEED;
 const STICK_POINTS = 10;
-const PIG_POINTS = 50;
+const PIG_POINTS = 150;
+/**
+ * Pigs shot within this long of each other form a chain. Pigs in a row stand
+ * about two beats (1.1 s) apart; 2.5 s also links neighbouring pig segments.
+ */
+const PIG_COMBO_WINDOW_MS = 2500;
+/** Points multiplier for the 1st, 2nd, 3rd-and-later pig of a chain. */
+const PIG_COMBO_MULTIPLIERS = [1, 1.5, 2];
+/** Chain colours: plain, then orange, pink and gold from the fourth pig. */
+const PIG_COMBO_COLORS = ['#ffffff', '#ffb347', '#ff7ab8', '#ffd84a'];
+const pigComboColor = (combo: number) => PIG_COMBO_COLORS[Math.min(combo, PIG_COMBO_COLORS.length) - 1];
+const COMBO_NAMES = ['', '', '双连杀', '三连杀', '四连杀', '五连杀'];
+const comboName = (combo: number) => COMBO_NAMES[combo] ?? `${combo}连杀`;
 /** Hearts, member tokens and sunflowers; a heart past all five slots is worth double. */
 const ITEM_POINTS = 50;
 /**
@@ -610,7 +622,7 @@ const PICK_SPARKLES = [
  * front with her trail; tap another and the ring turns her to the front;
  * one is picked at random each visit) and the start button below. Enter starts.
  */
-const HomeScreen: React.FC<{ member: number; keysEnabled: boolean; onPick: (member: number) => void; onStart: () => void }> = ({ member, keysEnabled, onPick, onStart }) => {
+const HomeScreen: React.FC<{ member: number; isPhone: boolean; keysEnabled: boolean; onPick: (member: number) => void; onStart: () => void }> = ({ member, isPhone, keysEnabled, onPick, onStart }) => {
   const [rootRef, height] = useElementHeight<HTMLDivElement>();
   // Everything scales with the layout height: 390 is a landscape phone.
   const scale = clamp(height / 390, 1, 2);
@@ -640,6 +652,7 @@ const HomeScreen: React.FC<{ member: number; keysEnabled: boolean; onPick: (memb
   return (
     <div
       ref={rootRef}
+      inert={!keysEnabled}
       className="home-screen absolute inset-0 z-20 flex flex-col items-center justify-between"
       style={{
         fontFamily: 'NJZPixelZh, sans-serif',
@@ -740,7 +753,7 @@ const HomeScreen: React.FC<{ member: number; keysEnabled: boolean; onPick: (memb
 
       {/* Start button, with the keyboard controls either side where there is a keyboard. */}
       <div className="home-enter home-enter-late flex items-center gap-5">
-        <span className="mouse-only w-24 items-center justify-end gap-1 text-[11px] text-white/60"><kbd className="home-key">↑</kbd><kbd className="home-key">↓</kbd>移动</span>
+        {!isPhone && <span className="mouse-only w-24 items-center justify-end gap-1 text-[11px] text-white/60"><kbd className="home-key">↑</kbd><kbd className="home-key">↓</kbd>移动</span>}
         <KeycapButton
           onClick={onStart}
           width={Math.round(184 * buttonScale)}
@@ -754,7 +767,7 @@ const HomeScreen: React.FC<{ member: number; keysEnabled: boolean; onPick: (memb
           <span className="home-start-arrow flex"><PixelIcon name="play" size={18} /></span>
           立即开始
         </KeycapButton>
-        <span className="mouse-only w-24 items-center justify-start gap-1 text-[11px] text-white/60"><kbd className="home-key">空格</kbd>发射</span>
+        {!isPhone && <span className="mouse-only w-24 items-center justify-start gap-1 text-[11px] text-white/60"><kbd className="home-key">空格</kbd>发射</span>}
       </div>
     </div>
   );
@@ -765,7 +778,7 @@ const HelpPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const powerCells = Math.ceil(POWER_DURATION_MS / 1000);
   const rows: Array<{ icon: React.ReactNode; title: string; points?: string; text: string }> = [
     { icon: <PixelSprite compact rows={STICK_ICON_SPRITE} colors={STICK_ICON_COLORS} cellSize={2} />, title: '应援棒', points: `+${STICK_POINTS}`, text: '一串连着吃，吃完这一串再一起显示得分。' },
-    { icon: <PixelSprite compact rows={PIG_ICON_SPRITE} colors={PIG_ICON_COLORS} cellSize={2} />, title: '暴击方猪', points: `+${PIG_POINTS}`, text: '发射子弹打倒站在水管上的猪；撞到它会掉血。' },
+    { icon: <PixelSprite compact rows={PIG_ICON_SPRITE} colors={PIG_ICON_COLORS} cellSize={2} />, title: '暴击方猪', points: `+${PIG_POINTS}`, text: `发射子弹打倒站在水管上的猪；撞到它会掉血。${PIG_COMBO_WINDOW_MS / 1000} 秒内接着打倒下一只就是连杀：第 2 只 ×${PIG_COMBO_MULTIPLIERS[1]}，第 3 只起 ×${PIG_COMBO_MULTIPLIERS[2]}。` },
     { icon: <PixelSprite compact rows={FILLED_HEART_SPRITE} colors={HEART_COLORS} cellSize={2} />, title: '爱心', points: `+${ITEM_POINTS}`, text: `补回一颗空心（最多 ${START_HEALTH} 颗）；血满时只加分。` },
     { icon: <PixelSprite compact rows={SUNFLOWER_ROWS} colors={SUNFLOWER_PALETTE} cellSize={1.2} />, title: '太阳花', points: `+${ITEM_POINTS}`, text: `进入无敌时间 ${POWER_DURATION_MS / 1000} 秒，详见下方。` },
     { icon: <PixelSprite compact rows={MEMBER_TOKENS[2].rows} colors={MEMBER_TOKENS[2].palette} cellSize={0.8} />, title: '变身头像', points: `+${ITEM_POINTS}`, text: '换成下一位成员，五人按顺序轮流上场。' },
@@ -891,6 +904,8 @@ const FlightGame: React.FC = () => {
     stickCombo: 0,
     stickComboDoubled: false,
     stickComboAt: 0,
+    pigCombo: 0,
+    pigComboAt: 0,
     health: START_HEALTH,
     collected: 0,
     defeated: 0,
@@ -939,6 +954,12 @@ const FlightGame: React.FC = () => {
   const homeMemberRef = useRef(homeMember);
   homeMemberRef.current = homeMember;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const supportEntryRef = useRef<HTMLButtonElement | null>(null);
+  const closeSupport = useCallback(() => {
+    setSupportOpen(false);
+    requestAnimationFrame(() => supportEntryRef.current?.focus({ preventScroll: true }));
+  }, []);
   /** The run ended by running out of hearts (the card cheers instead of celebrating). */
   const [failed, setFailed] = useState(false);
   const [effectsMuted, setEffectsMuted] = useState(false);
@@ -949,6 +970,14 @@ const FlightGame: React.FC = () => {
   /** Bumped on every pickup / pig kill so that HUD counter pops; `gain` is 2 in invincible mode. */
   const [stickPop, setStickPop] = useState({ id: 0, gain: 1 });
   const [pigPop, setPigPop] = useState({ id: 0, gain: 1 });
+  /** Latest pig chain, shown beside the pig counter while it can still grow. */
+  const [pigCombo, setPigCombo] = useState({ id: 0, combo: 0 });
+  useEffect(() => {
+    if (pigCombo.combo < 2) return;
+    // The badge goes when the chain can no longer grow.
+    const timer = window.setTimeout(() => setPigCombo((shown) => (shown.id === pigCombo.id ? { ...shown, combo: 0 } : shown)), PIG_COMBO_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [pigCombo]);
   /** Whole seconds of invincibility left (0 when not powered), for the centre countdown. */
   const [powerLeft, setPowerLeft] = useState(0);
   /** Bumped when invincibility starts so its "×2" banner plays once. */
@@ -990,6 +1019,7 @@ const FlightGame: React.FC = () => {
     setHeartGain(null);
     setPowerUntil(0);
     setPowerLeft(0);
+    setPigCombo({ id: 0, combo: 0 });
     gameRef.current = {
       distance: 0,
       elapsed: 0,
@@ -998,6 +1028,8 @@ const FlightGame: React.FC = () => {
     stickCombo: 0,
     stickComboDoubled: false,
     stickComboAt: 0,
+      pigCombo: 0,
+      pigComboAt: 0,
       health: START_HEALTH,
       collected: 0,
       defeated: 0,
@@ -1116,6 +1148,7 @@ const FlightGame: React.FC = () => {
       setPowerUntil(game.invincibleUntil);
     }
     game.invulnerableUntil += pausedFor;
+    game.pigComboAt += pausedFor;
     setGamePhase('playing');
     const audio = audioRef.current;
     if (audio) void audio.play().catch(() => {});
@@ -1320,7 +1353,7 @@ const FlightGame: React.FC = () => {
     }
   }, []);
 
-  const playEnemyHitSound = useCallback(() => {
+  const playEnemyHitSound = useCallback((combo = 1) => {
     if (effectsMutedRef.current) return;
     try {
       const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -1329,13 +1362,29 @@ const FlightGame: React.FC = () => {
       audioContextRef.current = audioContext;
       if (audioContext.state === 'suspended') void audioContext.resume().catch(() => {});
 
-      // A bright two-part pop marks a confirmed enemy defeat, separate from firing.
+      // A bright two-part pop marks a confirmed enemy defeat, separate from
+      // firing. Each pig of a chain pops a step higher (0, 4, 7, 12 semitones)
+      // and adds a short chime on top.
+      const lift = 2 ** ([0, 4, 7, 12][Math.min(combo, 4) - 1] / 12);
       const oscillator = audioContext.createOscillator();
       const gain = audioContext.createGain();
       const startAt = audioContext.currentTime;
       oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(620, startAt);
-      oscillator.frequency.exponentialRampToValueAtTime(250, startAt + 0.09);
+      oscillator.frequency.setValueAtTime(620 * lift, startAt);
+      oscillator.frequency.exponentialRampToValueAtTime(250 * lift, startAt + 0.09);
+      if (combo > 1) {
+        const chime = audioContext.createOscillator();
+        const chimeGain = audioContext.createGain();
+        chime.type = 'square';
+        chime.frequency.setValueAtTime(1046.5 * lift, startAt + 0.07);
+        chimeGain.gain.setValueAtTime(0.0001, startAt);
+        chimeGain.gain.setValueAtTime(0.07, startAt + 0.07);
+        chimeGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.2);
+        chime.connect(chimeGain);
+        chimeGain.connect(audioContext.destination);
+        chime.start(startAt + 0.07);
+        chime.stop(startAt + 0.21);
+      }
       gain.gain.setValueAtTime(0.0001, startAt);
       gain.gain.exponentialRampToValueAtTime(0.19, startAt + 0.006);
       gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.13);
@@ -1513,8 +1562,8 @@ const FlightGame: React.FC = () => {
           kind: 'enemy',
           x: originX + support.x + offset,
           y: pigCenterY(support),
-          width: PIG_WIDTH * entityScale,
-          height: PIG_HEIGHT * entityScale,
+          width: PIG_WIDTH * pigScaleFor(entityScale),
+          height: PIG_HEIGHT * pigScaleFor(entityScale),
           supportPipeId: pipeEntities[pig.pipe].id,
           patrolSpan: span,
           patrolSpeed: pig.speed * entityScale,
@@ -1902,6 +1951,25 @@ const FlightGame: React.FC = () => {
       };
       const playerPolygon = rectPolygon(playerRect.x, playerRect.y, playerRect.width, playerRect.height);
 
+      /** Shot or rammed: chained kills within the window score more and pop harder. */
+      const defeatPig = (entity: GameEntity, gain: number) => {
+        game.pigCombo = now - game.pigComboAt <= PIG_COMBO_WINDOW_MS ? game.pigCombo + 1 : 1;
+        game.pigComboAt = now;
+        const combo = game.pigCombo;
+        const points = PIG_POINTS * PIG_COMBO_MULTIPLIERS[Math.min(combo, PIG_COMBO_MULTIPLIERS.length) - 1] * gain;
+        const color = gain > 1 ? SCORE_GOLD : pigComboColor(combo);
+        game.defeated += gain;
+        game.bonusScore += points;
+        effectsRef.current.pigPop(entity.x, entity.y, now, combo, pigComboColor(combo));
+        const top = entity.y - entity.height / 2;
+        // The longer the chain, the bigger its numbers.
+        effectsRef.current.score(entity.x, top, points, color, false, [1, 1.3, 1.5][Math.min(combo, 3) - 1]);
+        if (combo > 1) effectsRef.current.label(entity.x, top - 56 * entityScale, `${comboName(combo)}!`, pigComboColor(combo), 1.15);
+        setPigPop((pop) => ({ id: pop.id + 1, gain }));
+        setPigCombo((shown) => ({ id: shown.id + 1, combo }));
+        syncHud();
+        playEnemyHitSound(combo);
+      };
       const defeatedIds = new Set<number>();
       const spentProjectileIds = new Set<number>();
       projectilesRef.current.forEach((projectile) => {
@@ -1922,14 +1990,7 @@ const FlightGame: React.FC = () => {
           if (rectsOverlap(projectileRect, enemyRect)) {
             defeatedIds.add(entity.id);
             spentProjectileIds.add(projectile.id);
-            const gain = now < game.invincibleUntil ? POWER_MULTIPLIER : 1;
-            game.defeated += gain;
-            game.bonusScore += PIG_POINTS * gain;
-            effectsRef.current.pigPop(entity.x, entity.y, now);
-            effectsRef.current.score(entity.x, entity.y - entity.height / 2, PIG_POINTS * gain, gain > 1 ? SCORE_GOLD : '#ffffff');
-            setPigPop((pop) => ({ id: pop.id + 1, gain }));
-            syncHud();
-            playEnemyHitSound();
+            defeatPig(entity, now < game.invincibleUntil ? POWER_MULTIPLIER : 1);
             break;
           }
         }
@@ -2021,13 +2082,7 @@ const FlightGame: React.FC = () => {
           if (!polygonsOverlap(playerPolygon, hitPolygon)) return;
           if (entity.kind === 'enemy') {
             collectedIds.add(entity.id);
-            game.defeated += POWER_MULTIPLIER;
-            game.bonusScore += PIG_POINTS * POWER_MULTIPLIER;
-            effectsRef.current.pigPop(entity.x, entity.y, now);
-            effectsRef.current.score(entity.x, entity.y - entity.height / 2, PIG_POINTS * POWER_MULTIPLIER, SCORE_GOLD);
-            setPigPop((pop) => ({ id: pop.id + 1, gain: POWER_MULTIPLIER }));
-            syncHud();
-            playEnemyHitSound();
+            defeatPig(entity, POWER_MULTIPLIER);
           } else if (Math.random() < 0.5) {
             effectsRef.current.phase(playerX, playerRef.current.y);
           }
@@ -2189,7 +2244,7 @@ const FlightGame: React.FC = () => {
     <main
       className={`game-root ${isPhone ? 'phone-device ' : ''}${phonePreview ? 'phone-preview ' : ''}${allowPortrait ? 'allow-portrait ' : ''}overflow-hidden bg-[#081725] text-white select-none`}
       style={{
-        touchAction: helpOpen ? 'auto' : 'none',
+        touchAction: helpOpen || supportOpen ? 'auto' : 'none',
         fontFamily: 'NJZPixelZh, NJZPixelEn, monospace',
         fontSynthesis: 'none',
         textRendering: 'geometricPrecision',
@@ -2221,7 +2276,7 @@ const FlightGame: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4 sm:p-6" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+      <div inert={supportOpen} className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4 sm:p-6" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <div className={`flex flex-col items-start gap-1 ${phase === 'ready' ? 'invisible' : ''}`} style={{ filter: 'drop-shadow(0 2px 0 rgba(6, 10, 32, 0.55))' }}>
           {/* Row 1: the lives; lost ones keep their outline so you can see what a heart refills.
               Every top row is 44px tall (h-11) so hearts, counters and buttons share one centre line. */}
@@ -2259,6 +2314,11 @@ const FlightGame: React.FC = () => {
                   {counter.pop.gain > 1 && <span key={`float-${counter.pop.id}`} aria-hidden="true" className="count-float text-[15px] leading-none"><PixelNumber text={`+${counter.pop.gain}`} /></span>}
                 </span>
                 {powerLeft > 0 && <span aria-hidden="true" className="double-badge ml-1.5 text-[15px] leading-none"><PixelNumber text={`×${POWER_MULTIPLIER}`} /></span>}
+                {counter.key === 'pig' && pigCombo.combo >= 2 && (
+                  <span key={`combo-${pigCombo.id}`} className="combo-badge absolute left-full top-1/2 ml-2 whitespace-nowrap text-[17px] leading-none" style={{ color: pigComboColor(pigCombo.combo), animationPlayState: phase === 'paused' ? 'paused' : 'running' }}>
+                    {comboName(pigCombo.combo)}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -2285,6 +2345,11 @@ const FlightGame: React.FC = () => {
         </div>
 
         <div className="pointer-events-auto flex items-center gap-1" style={{ filter: 'drop-shadow(0 2px 0 rgba(6, 10, 32, 0.55))' }}>
+          {phase === 'ready' && (
+            <PixelButton onClick={event => { supportEntryRef.current = event.currentTarget; setHelpOpen(false); setSupportOpen(true); }} className="home-support h-11 px-2 text-[#e8efff]" aria-label="赞赏作者" title="赞赏作者">
+              <PixelIcon name="heart" size={20} /><span>赞赏作者</span>
+            </PixelButton>
+          )}
           {phase === 'ready' && (
             <PixelButton onClick={() => setHelpOpen(true)} className="h-11 w-11 text-[#e8efff]" aria-label="玩法说明" title="玩法说明">
               <PixelIcon name="info" size={22} />
@@ -2322,8 +2387,9 @@ const FlightGame: React.FC = () => {
         </div>
       </div>
 
-      {phase === 'ready' && <HomeScreen member={homeMember} keysEnabled={!helpOpen} onPick={pickHomeMember} onStart={startFromMenu} />}
+      {phase === 'ready' && <HomeScreen member={homeMember} isPhone={isPhone} keysEnabled={!helpOpen && !supportOpen} onPick={pickHomeMember} onStart={startFromMenu} />}
       {phase === 'ready' && helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
+      {phase === 'ready' && supportOpen && <SupportPanel onClose={closeSupport} />}
 
       {/* Pause: a dim veil over the frozen stage and three big square buttons. */}
       {phase === 'paused' && (

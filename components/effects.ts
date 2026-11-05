@@ -58,6 +58,10 @@ interface ScorePopup {
   life: number;
   /** Pinned to the screen (pickups at the player) instead of the world. */
   fixed: boolean;
+  /** Size relative to a normal score pop-up. */
+  size: number;
+  /** Chinese text in the pixel font instead of the boxy digits. */
+  label?: boolean;
 }
 
 const POPUP_LIFE = 1.05;
@@ -100,8 +104,13 @@ export class Effects {
   }
 
   /** Float earned points above (x, y); `fixed` keeps it on screen with the player. */
-  score(x: number, y: number, points: number, color = '#ffffff', fixed = false) {
-    this.popups.push({ x, y, text: `+${points}`, color, life: POPUP_LIFE, fixed });
+  score(x: number, y: number, points: number, color = '#ffffff', fixed = false, size = 1) {
+    this.popups.push({ x, y, text: `+${points}`, color, life: POPUP_LIFE, fixed, size });
+  }
+
+  /** A word ("3连杀!") floating with a score pop-up, in the pixel font. */
+  label(x: number, y: number, text: string, color: string, size = 1) {
+    this.popups.push({ x, y, text, color, life: POPUP_LIFE, fixed: false, size, label: true });
   }
 
   private burst(x: number, y: number, colors: string[], count: number, speed: [number, number], gravity: number, size: [number, number]) {
@@ -135,12 +144,15 @@ export class Effects {
     this.burst(x, y, MUZZLE_SPARKS, 3, [90, 160], 0, [3, 3]);
   }
 
-  /** A pig bursts into pink chunks with a white star (the HUD pig counter bumps). */
-  pigPop(x: number, y: number, now: number) {
+  /** A pig bursts into pink chunks with a white star (the HUD pig counter
+   * bumps). Each kill in a chain hits a little harder, in the chain colour. */
+  pigPop(x: number, y: number, now: number, combo = 1, color = '#ffffff') {
+    const step = Math.min(3, combo) - 1;
     this.flashes.push({ x, y, life: 0.16, maxLife: 0.16, radius: 34, color: '#ffffff' });
-    this.burst(x, y, PIG_CHUNKS, 16, [140, 340], 720, [3, 6]);
-    this.shake(now, 5, 140);
-    this.hitStopUntil = Math.max(this.hitStopUntil, now + 50);
+    if (step) this.flashes.push({ x, y, life: 0.24, maxLife: 0.24, radius: 46 + step * 10, color });
+    this.burst(x, y, step ? [...PIG_CHUNKS, color] : PIG_CHUNKS, 16 + step * 6, [140, 340 + step * 60], 720, [3, 6]);
+    this.shake(now, 5 + step * 2, 140 + step * 30);
+    this.hitStopUntil = Math.max(this.hitStopUntil, now + 50 + step * 15);
   }
 
   /** The player takes a hit: red-white sparks, a heavy shake and a pause. */
@@ -274,14 +286,15 @@ export class Effects {
    * overlapping glyph rectangles straight onto the scene with alpha made the
    * joints show through darker.)
    */
-  private popupSprite(text: string, color: string, devicePx: number) {
-    const key = `${text}|${color}|${devicePx}`;
+  private popupSprite(text: string, color: string, devicePx: number, label = false) {
+    const key = `${text}|${color}|${devicePx}|${label}`;
     let sprite = this.popupSprites.get(key);
     if (sprite) return sprite;
     if (this.popupSprites.size > 40) this.popupSprites.clear();
     const outline = Math.max(1, Math.round(devicePx / 20));
     const shadow = Math.max(1, Math.round(devicePx / 14));
     sprite = document.createElement('canvas');
+    if (label) return this.labelSprite(sprite, key, text, color, devicePx, outline, shadow);
     sprite.width = Math.ceil(digitsWidth(text, devicePx)) + outline * 2 + shadow;
     sprite.height = devicePx + outline * 2 + shadow;
     const paint = sprite.getContext('2d')!;
@@ -294,13 +307,38 @@ export class Effects {
     return sprite;
   }
 
+  /** Same outline and drop shadow as the digits, around pixel-font text. */
+  private labelSprite(sprite: HTMLCanvasElement, key: string, text: string, color: string, devicePx: number, outline: number, shadow: number) {
+    const font = `${devicePx}px NJZPixelZh, sans-serif`;
+    const measure = sprite.getContext('2d')!;
+    measure.font = font;
+    sprite.width = Math.ceil(measure.measureText(text).width) + outline * 2 + shadow;
+    sprite.height = Math.ceil(devicePx * 1.1) + outline * 2 + shadow;
+    const paint = sprite.getContext('2d')!;
+    paint.font = font;
+    paint.textBaseline = 'top';
+    paint.fillStyle = '#151c4a';
+    for (let dx = -outline; dx <= outline; dx += outline) {
+      for (let dy = -outline; dy <= outline; dy += outline) {
+        paint.fillText(text, outline + dx, outline + dy);
+        paint.fillText(text, outline + shadow + dx, outline + shadow + dy);
+      }
+    }
+    paint.fillStyle = color;
+    paint.fillText(text, outline, outline);
+    this.popupSprites.set(key, sprite);
+    return sprite;
+  }
+
   private drawPopups(context: CanvasRenderingContext2D) {
     if (!this.popups.length) return;
     // World units → device pixels for the current frame.
     const deviceScale = context.getTransform().a || 1;
     // Whole device pixels per glyph unit keep every stroke edge crisp.
-    const devicePx = Math.max(1, Math.round((POPUP_HEIGHT * deviceScale) / 20)) * 20;
     this.popups.forEach((popup) => {
+      // Digits snap to whole device pixels per glyph unit; text only to even pixels.
+      const snap = popup.label ? 2 : 20;
+      const devicePx = Math.max(1, Math.round((POPUP_HEIGHT * popup.size * deviceScale) / snap)) * snap;
       const t = 1 - popup.life / POPUP_LIFE;
       // Springs in (ease-out-back overshoot), glides up with a soft ease-out,
       // fades in fast and out gently while shrinking a touch.
@@ -309,7 +347,7 @@ export class Effects {
       const leave = Math.max(0, (t - 0.62) / 0.38);
       const scale = (0.4 + 0.6 * back) * (1 - leave * 0.15);
       const rise = POPUP_RISE * (1 - (1 - t) ** 4);
-      const sprite = this.popupSprite(popup.text, popup.color, devicePx);
+      const sprite = this.popupSprite(popup.text, popup.color, devicePx, popup.label);
       const width = (sprite.width / deviceScale) * scale;
       const height = (sprite.height / deviceScale) * scale;
       context.save();

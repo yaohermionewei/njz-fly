@@ -53,10 +53,16 @@ const ResultModal: React.FC<ResultModalProps> = (props) => {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [assets, setAssets] = useState<Awaited<ReturnType<typeof prepareResultCard>> | null>(null);
   const [error, setError] = useState('');
-  const [shareNote, setShareNote] = useState('');
+  const [shareToast, setShareToast] = useState<{ message: string } | null>(null);
   const [sharing, setSharing] = useState(false);
   const [values, setValues] = useState(() => resultTallyAt(record, 0));
   const shareFile = useRef<File | null>(null);
+
+  useEffect(() => {
+    if (!shareToast) return;
+    const timer = window.setTimeout(() => setShareToast(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [shareToast]);
 
   useLayoutEffect(() => {
     const overlay = overlayRef.current!;
@@ -119,7 +125,7 @@ const ResultModal: React.FC<ResultModalProps> = (props) => {
   const share = async () => {
     if (sharing) return;
     setSharing(true);
-    setShareNote('');
+    setShareToast(null);
     try {
       const file = shareFile.current ?? new File([await resultCardBlob(record)], '飞越冬夜.png', { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
@@ -128,10 +134,10 @@ const ResultModal: React.FC<ResultModalProps> = (props) => {
         const url = URL.createObjectURL(file), anchor = document.createElement('a');
         anchor.href = url; anchor.download = file.name; anchor.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setShareNote('战报图片已保存');
+        setShareToast({ message: '已保存' });
       }
     } catch (cause) {
-      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setShareNote('没能保存图片，请重试');
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setShareToast({ message: '保存失败，请重试' });
     } finally { setSharing(false); }
   };
 
@@ -153,9 +159,11 @@ const ResultModal: React.FC<ResultModalProps> = (props) => {
               </KeycapButton>
             </div>
             {onReplay && <button type="button" onClick={onReplay} className="landscape-result-replay" aria-label="重播动效" title="重播动效"><PixelIcon name="playSolid" size={12} />重播动效</button>}
-            <div className="landscape-result-note" role="status">{shareNote}</div>
           </div>
         </div>
+      </div>
+      <div className="result-toast-layer" role="status" aria-live="polite" aria-atomic="true">
+        {shareToast && <div className="result-toast">{shareToast.message}</div>}
       </div>
       <dl className="sr-only" aria-label="当前计分" data-tally-state={values.landed ? 'landed' : 'rolling'}>
         <dt>总分</dt><dd data-result-value="score">{values.score}</dd>

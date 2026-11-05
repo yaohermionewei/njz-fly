@@ -255,6 +255,13 @@ export function drawResultCard(canvas: HTMLCanvasElement, assets: ResultAssets, 
   context.setTransform(2, 0, 0, 2, 0, 0);
   context.imageSmoothingEnabled = false;
   context.drawImage(portraitBackdrop(assets, texture), 0, 0, 600, 800);
+  // Keep the public address legible when the exported card is viewed on a phone.
+  context.save();
+  context.globalAlpha = .5;
+  context.shadowColor = '#17356b';
+  context.shadowOffsetY = 2;
+  text(context, 'njzfly.wystudio.zone', 300, 24, 20, '#dcecff');
+  context.restore();
   const title = resultTitle(record.failed), titleSize = 36;
   const ink = context.createLinearGradient(0, 108, 0, 148);
   ink.addColorStop(0, '#ffffff'); ink.addColorStop(1, '#d6edff');

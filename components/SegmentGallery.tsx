@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { drawPipe } from './pipeArt';
 import { PICKUP_HEIGHT } from './gameMetrics';
 import { pickupPolygon, pipeVisualPolygon, validatePhoneLayout } from './phoneLayouts';
-import { PHONE_ENTITY_SCALE } from './displayProfile';
+import { PHONE_ENTITY_SCALE, pigScaleFor } from './displayProfile';
 import { drawCollectible, drawHeartPickup, drawMemberToken, drawPig, drawSunflower } from './gameArt';
 import {
   BAR,
@@ -124,7 +124,7 @@ const SegmentCanvas: React.FC<PreviewProps> = ({ segment, mirrored, variant, sho
         context.stroke();
         context.setLineDash([]);
       }
-      drawPig(context, support.x + span * (pig.phase * 2 - 1), y, PIG_WIDTH * scale, PIG_HEIGHT * scale, 1, index * 0.3, 0);
+      drawPig(context, support.x + span * (pig.phase * 2 - 1), y, PIG_WIDTH * pigScaleFor(scale), PIG_HEIGHT * pigScaleFor(scale), 1, index * 0.3, 0);
     });
 
     content.coins.forEach((coin) => {
@@ -164,7 +164,8 @@ const SegmentCanvas: React.FC<PreviewProps> = ({ segment, mirrored, variant, sho
         context.strokeRect(issue.x - 20, issue.y - 20, 40, 40);
       });
       context.font = '18px NJZPixelZh'; context.fillStyle = issues.length ? '#ff8da3' : '#a4f5bb';
-      context.fillText(issues.length ? `间距问题：${issues.length}` : '间距与完整角色通行检查通过', 12, 28);
+      const k = content.layoutScale ? `竖向间距 ×${content.layoutScale.toFixed(2)}（物件 ×1.5）· ` : '';
+      context.fillText(issues.length ? `${k}间距问题：${issues.length}` : `${k}间距检查通过`, 12, 28);
     }
 
     solved.unreachableCoins.forEach((coin) => {
